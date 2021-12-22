@@ -29,6 +29,11 @@ from weblate.checks.base import TargetCheck
 from weblate.utils.html import extract_bleach
 from weblate.utils.xml import parse_xml
 
+
+
+LDGTAG_MATCH = re.compile(r"\[\[[^\]]+\]\]")
+
+
 BBCODE_MATCH = re.compile(
     r"(?P<start>\[(?P<tag>[^]]+)(@[^]]*)?\])(.*?)(?P<end>\[\/(?P=tag)\])", re.MULTILINE
 )
@@ -85,6 +90,40 @@ XML_ENTITY_MATCH = re.compile(r"&#?\w+;")
 def strip_entities(text):
     """Strip all HTML entities (we don't care about them)."""
     return XML_ENTITY_MATCH.sub(" ", text)
+
+
+
+class LDGTagCheck(TargetCheck):
+    """Check for matching LDG tags."""
+
+    check_id = "ldgtag"
+    name = _("LDGTag markup")
+    description = _("LDGTag in translation does not match source")
+
+    def check_single(self, source, target, unit):
+        # Parse source
+        src_match = LDGTAG_MATCH.findall(source)
+        # Any BBCode in source?
+        if not src_match:
+            return False
+        # Parse target
+        tgt_match = LDGTAG_MATCH.findall(target)
+        if len(src_match) != len(tgt_match):
+            return True
+
+        src_tags = {x for x in src_match}
+        tgt_tags = {x for x in tgt_match}
+
+        return src_tags != tgt_tags
+
+    def check_highlight(self, source, unit):
+        if self.should_skip(unit):
+            return []
+        ret = []
+        for match in LDGTAG_MATCH.finditer(source):
+            ret.append((match.start(), match.end(), match.group()))
+        return ret
+
 
 
 class BBCodeCheck(TargetCheck):

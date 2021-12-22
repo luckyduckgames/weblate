@@ -29,6 +29,7 @@ from weblate.checks.markup import (
     URLCheck,
     XMLTagsCheck,
     XMLValidityCheck,
+    LDGTagCheck,
 )
 from weblate.checks.tests.test_checks import CheckTestCase
 from weblate.trans.models import Unit
@@ -374,3 +375,15 @@ class SafeHTMLCheckTest(CheckTestCase):
                 "safe-html",
             ),
         )
+
+
+
+class LDGTagCheckTest(CheckTestCase):
+    check = LDGTagCheck()
+
+    def setUp(self):
+        super().setUp()
+        self.test_good_matching = ("prefix [[i:icon]] suffix", "prefix [[i:icon]] suffix", "")
+        self.test_failure_1 = ("prefix [[i:icon]] suffix", "prefix [[i:icon2]] suffix", "")
+        self.test_failure_2 = ("prefix [[i:icon]] suffix", "prefix suffix", "")
+        self.test_highlight = ("", "Test [[i:icon]]. Test [[s:stringId]].", [(4, 14, "[[i:icon]]"), (21, 35, "[[s:stringId]]")])
