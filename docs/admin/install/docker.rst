@@ -184,12 +184,20 @@ and then do:
     docker-compose -f docker-compose-https.yml -f docker-compose-https.override.yml build
     docker-compose -f docker-compose-https.yml -f docker-compose-https.override.yml up
 
+.. _upgrading-docker:
+
 Upgrading the Docker container
 ------------------------------
 
 Usually it is good idea to only update the Weblate container and keep the PostgreSQL
 container at the version you have, as upgrading PostgreSQL is quite painful and in most
 cases does not bring many benefits.
+
+.. versionchanged:: 4.10-1
+
+   Since Weblate 4.10-1, the Docker container uses Django 4.0 what requires
+   PostgreSQL 10 or newer, please upgrade it prior to upgrading Weblate.
+   See :ref:`upgrade-4.10` for more details.
 
 You can do this by sticking with the existing docker-compose and just pull
 the latest images and then restart:
@@ -257,7 +265,7 @@ You can also fine-tune individual worker categories:
 .. code-block:: yaml
 
     environment:
-      UWSGI_WORKERS: 4
+      WEB_WORKERS: 4
       CELERY_MAIN_OPTIONS: --concurrency 2
       CELERY_NOTIFY_OPTIONS: --concurrency 1
       CELERY_TRANSLATE_OPTIONS: --concurrency 1
@@ -271,7 +279,7 @@ You can also fine-tune individual worker categories:
    :envvar:`CELERY_TRANSLATE_OPTIONS`,
    :envvar:`CELERY_BACKUP_OPTIONS`,
    :envvar:`CELERY_BEAT_OPTIONS`,
-   :envvar:`UWSGI_WORKERS`
+   :envvar:`WEB_WORKERS`
 
 .. _docker-scaling:
 
@@ -397,12 +405,21 @@ Generic settings
             :envvar:`WEBLATE_ADMIN_PASSWORD`
 
 .. envvar:: WEBLATE_SERVER_EMAIL
+
+    The email address that error messages are sent from.
+
+    .. seealso::
+
+        :std:setting:`django:SERVER_EMAIL`,
+        :ref:`production-email`
+
 .. envvar:: WEBLATE_DEFAULT_FROM_EMAIL
 
     Configures the address for outgoing e-mails.
 
     .. seealso::
 
+        :std:setting:`django:DEFAULT_FROM_EMAIL`,
         :ref:`production-email`
 
 .. envvar:: WEBLATE_CONTACT_FORM
@@ -957,6 +974,12 @@ GitHub
 
 .. envvar:: WEBLATE_SOCIAL_AUTH_GITHUB_KEY
 .. envvar:: WEBLATE_SOCIAL_AUTH_GITHUB_SECRET
+.. envvar:: WEBLATE_SOCIAL_AUTH_GITHUB_ORG_KEY
+.. envvar:: WEBLATE_SOCIAL_AUTH_GITHUB_ORG_SECRET
+.. envvar:: WEBLATE_SOCIAL_AUTH_GITHUB_ORG_NAME
+.. envvar:: WEBLATE_SOCIAL_AUTH_GITHUB_TEAM_KEY
+.. envvar:: WEBLATE_SOCIAL_AUTH_GITHUB_TEAM_SECRET
+.. envvar:: WEBLATE_SOCIAL_AUTH_GITHUB_TEAM_ID
 
     Enables :ref:`github_auth`.
 
@@ -1430,7 +1453,7 @@ Container settings
    It is used to determine :envvar:`CELERY_MAIN_OPTIONS`,
    :envvar:`CELERY_NOTIFY_OPTIONS`, :envvar:`CELERY_MEMORY_OPTIONS`,
    :envvar:`CELERY_TRANSLATE_OPTIONS`, :envvar:`CELERY_BACKUP_OPTIONS`,
-   :envvar:`CELERY_BEAT_OPTIONS`, and :envvar:`UWSGI_WORKERS`. You can use
+   :envvar:`CELERY_BEAT_OPTIONS`, and :envvar:`WEB_WORKERS`. You can use
    these settings to fine-tune.
 
 .. envvar:: CELERY_MAIN_OPTIONS
@@ -1458,7 +1481,7 @@ Container settings
         :doc:`Celery worker options <celery:reference/celery.bin.worker>`,
         :ref:`celery`
 
-.. envvar:: UWSGI_WORKERS
+.. envvar:: WEB_WORKERS
 
     Configure how many uWSGI workers should be executed.
 
@@ -1469,7 +1492,7 @@ Container settings
     .. code-block:: yaml
 
         environment:
-          UWSGI_WORKERS: 32
+          WEB_WORKERS: 32
 
 .. envvar:: WEBLATE_SERVICE
 

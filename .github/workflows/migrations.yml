@@ -28,14 +28,14 @@ jobs:
       - name: Start services
         run: ./ci/services-up ${{ matrix.database }}
       - name: Cache pip
-        uses: actions/cache@v2.1.6
+        uses: actions/cache@v2.1.7
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-migrate-${{ hashFiles('**/requirements*.txt') }}
       - name: Install apt dependencies
         run: sudo ./ci/apt-install $CI_DATABASE
       - name: Set up Python 3.7
-        uses: actions/setup-python@v2.3.0
+        uses: actions/setup-python@v2.3.1
         with:
           python-version: 3.7
       - name: Install pip dependencies
@@ -65,6 +65,8 @@ jobs:
         run: ./ci/run-migrate 4.8
       - name: Migrate from 4.9
         run: ./ci/run-migrate 4.9
+      - name: Migrate from 4.10
+        run: ./ci/run-migrate 4.10
       - name: Coverage
         run: |
           coverage combine

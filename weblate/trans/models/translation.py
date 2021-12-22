@@ -375,7 +375,9 @@ class Translation(
                 filenames = self.get_hash_filenames()
                 for i, old_part in enumerate(old_parts):
                     if old_part != new_parts[i]:
-                        details["filename"] = filenames[i]
+                        details["filename"] = filenames[i][
+                            len(self.component.full_path) :
+                        ].lstrip("/")
                         break
 
         elif force:
@@ -594,6 +596,10 @@ class Translation(
 
         # Update stats (the translated flag might have changed)
         self.invalidate_cache()
+
+        # Make sure template cache is purged upon commit
+        if self.is_template:
+            self.component.drop_template_store_cache()
 
         return True
 
@@ -1075,7 +1081,7 @@ class Translation(
                 request,
                 unit.context,
                 split_plural(unit.source),
-                split_plural(unit.target),
+                split_plural(unit.target) if not self.is_source else [],
                 is_batch_update=True,
             )
             accepted += 1
@@ -1148,6 +1154,7 @@ class Translation(
                     filecopy,
                     component.file_format_cls,
                     None,
+                    as_template=True,
                 )
             else:
                 template_store = component.template_store
@@ -1256,9 +1263,12 @@ class Translation(
 
     def get_store_change_translations(self):
         component = self.component
-        if not self.is_source or component.has_template():
-            return [self]
-        return component.translation_set.exclude(id=self.id)
+        result = []
+        if self.is_source:
+            result.extend(component.translation_set.exclude(id=self.id))
+        # Source is always at the end
+        result.append(self)
+        return result
 
     @transaction.atomic
     def add_unit(  # noqa: C901
@@ -1401,6 +1411,9 @@ class Translation(
                     continue
                 # Delete the removed unit from the database
                 translation_unit.delete()
+                # Skip file processing on source language without a storage
+                if not self.filename:
+                    continue
                 # Does unit exist in the file?
                 try:
                     pounit, add = translation.store.find_unit(unit.context, unit.source)

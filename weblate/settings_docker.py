@@ -207,12 +207,6 @@ STATICFILES_FINDERS = (
 with open("/app/data/secret") as handle:
     SECRET_KEY = handle.read()
 
-_TEMPLATE_LOADERS = [
-    "django.template.loaders.filesystem.Loader",
-    "django.template.loaders.app_directories.Loader",
-]
-if not DEBUG:
-    _TEMPLATE_LOADERS = [("django.template.loaders.cached.Loader", _TEMPLATE_LOADERS)]
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -226,8 +220,8 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "weblate.trans.context_processors.weblate_context",
             ],
-            "loaders": _TEMPLATE_LOADERS,
         },
+        "APP_DIRS": True,
     }
 ]
 
@@ -263,6 +257,35 @@ if "WEBLATE_SOCIAL_AUTH_GITHUB_KEY" in os.environ:
 SOCIAL_AUTH_GITHUB_KEY = os.environ.get("WEBLATE_SOCIAL_AUTH_GITHUB_KEY", "")
 SOCIAL_AUTH_GITHUB_SECRET = os.environ.get("WEBLATE_SOCIAL_AUTH_GITHUB_SECRET", "")
 SOCIAL_AUTH_GITHUB_SCOPE = ["user:email"]
+
+# GitHub org specific auth
+if "WEBLATE_SOCIAL_AUTH_GITHUB_ORG_KEY" in os.environ:
+    AUTHENTICATION_BACKENDS += ("social_core.backends.github.GithubOrganizationOAuth2",)
+
+SOCIAL_AUTH_GITHUB_ORG_KEY = os.environ.get(
+    "WEBLATE_SOCIAL_AUTH_GITHUB_ORG_KEY", SOCIAL_AUTH_GITHUB_KEY
+)
+SOCIAL_AUTH_GITHUB_ORG_SECRET = os.environ.get(
+    "WEBLATE_SOCIAL_AUTH_GITHUB_ORG_SECRET", SOCIAL_AUTH_GITHUB_SECRET
+)
+SOCIAL_AUTH_GITHUB_ORG_NAME = os.environ.get("WEBLATE_SOCIAL_AUTH_GITHUB_ORG_NAME", "")
+
+# GitHub team specific auth
+if "WEBLATE_SOCIAL_AUTH_GITHUB_TEAM_KEY" in os.environ:
+    AUTHENTICATION_BACKENDS += ("social_core.backends.github.GithubTeamOAuth2",)
+
+SOCIAL_AUTH_GITHUB_TEAM_KEY = os.environ.get(
+    "WEBLATE_SOCIAL_AUTH_GITHUB_TEAM_KEY", SOCIAL_AUTH_GITHUB_KEY
+)
+SOCIAL_AUTH_GITHUB_TEAM_SECRET = os.environ.get(
+    "WEBLATE_SOCIAL_AUTH_GITHUB_TEAM_SECRET", SOCIAL_AUTH_GITHUB_SECRET
+)
+SOCIAL_AUTH_GITHUB_TEAM_ID = os.environ.get("WEBLATE_SOCIAL_AUTH_GITHUB_TEAM_ID", "")
+
+if (
+    SOCIAL_AUTH_GITHUB_ORG_NAME or SOCIAL_AUTH_GITHUB_TEAM_ID
+) and "read:org" not in SOCIAL_AUTH_GITHUB_SCOPE:
+    SOCIAL_AUTH_GITHUB_SCOPE.append("read:org")
 
 if "WEBLATE_SOCIAL_AUTH_BITBUCKET_KEY" in os.environ:
     AUTHENTICATION_BACKENDS += ("social_core.backends.bitbucket.BitbucketOAuth",)
@@ -1131,6 +1154,7 @@ REST_FRAMEWORK = {
         else "rest_framework.permissions.IsAuthenticatedOrReadOnly"
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": (
+        "weblate.api.authentication.ProjectTokenAuthentication",
         "rest_framework.authentication.TokenAuthentication",
         "weblate.api.authentication.BearerAuthentication",
         "rest_framework.authentication.SessionAuthentication",

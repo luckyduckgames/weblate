@@ -616,6 +616,9 @@ The check fails on differing translations of one string within a project. This
 can also lead to inconsistencies in displayed checks. You can find other
 translations of this string on the :guilabel:`Other occurrences` tab.
 
+This check applies to all components in a project that have
+:ref:`component-allow_translation_propagation` turned on.
+
 .. hint::
 
    For performance reasons, the check might not find all inconsistencies, it
@@ -1279,7 +1282,7 @@ Long untranslated
 :Check class: ``weblate.checks.source.LongUntranslatedCheck``
 :Flag to ignore: ``ignore-long-untranslated``
 
-When the string has not been translated for a long time, it is can indicate problem in a
+When the string has not been translated for a long time, it can indicate a problem in a
 source string making it hard to translate.
 
 

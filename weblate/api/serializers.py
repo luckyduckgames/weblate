@@ -20,7 +20,6 @@ from copy import copy
 from zipfile import BadZipfile
 
 from django.conf import settings
-from django.core.exceptions import PermissionDenied
 from rest_framework import serializers
 
 from weblate.accounts.models import Subscription
@@ -370,11 +369,16 @@ class ProjectSerializer(serializers.ModelSerializer):
         }
 
 
-class RepoField(serializers.CharField):
+class LinkedField(serializers.CharField):
     def get_attribute(self, instance):
         if instance.linked_component:
             instance = instance.linked_component
-        url = getattr(instance, self.source)
+        return getattr(instance, self.source)
+
+
+class RepoField(LinkedField):
+    def get_attribute(self, instance):
+        url = super().get_attribute(instance)
         if not settings.HIDE_REPO_CREDENTIALS:
             return url
         return cleanup_repo_url(url)
@@ -426,6 +430,8 @@ class ComponentSerializer(RemovableSerializer):
     repo = RepoField(max_length=REPO_LENGTH)
 
     push = RepoField(required=False, allow_blank=True, max_length=REPO_LENGTH)
+    branch = LinkedField(required=False, allow_blank=True, max_length=REPO_LENGTH)
+    push_branch = LinkedField(required=False, allow_blank=True, max_length=REPO_LENGTH)
 
     serializer_url_field = MultiFieldHyperlinkedIdentityField
 
@@ -789,11 +795,15 @@ class UploadRequestSerializer(ReadOnlySerializer):
     def check_perms(self, user, obj):
         data = self.validated_data
         if data["conflicts"] and not user.has_perm("upload.overwrite", obj):
-            raise PermissionDenied()
+            raise serializers.ValidationError(
+                {"conflicts": "You can not overwrite existing translations."}
+            )
         if data["conflicts"] == "replace-approved" and not user.has_perm(
             "unit.review", obj
         ):
-            raise PermissionDenied()
+            raise serializers.ValidationError(
+                {"conflicts": "You can not overwrite existing approved translations."}
+            )
 
         if data["method"] == "source" and not obj.is_source:
             raise serializers.ValidationError(
@@ -801,7 +811,9 @@ class UploadRequestSerializer(ReadOnlySerializer):
             )
 
         if not check_upload_method_permissions(user, obj, data["method"]):
-            raise PermissionDenied()
+            raise serializers.ValidationError(
+                {"method": "This method is not available here."}
+            )
 
 
 class RepoRequestSerializer(ReadOnlySerializer):

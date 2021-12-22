@@ -1,3 +1,36 @@
+Weblate 4.10.1
+--------------
+
+Released on December 22nd 2021.
+
+* Documented changes introduced by upgrading to Django 4.0.
+* Fixed displaying of :guilabel:`Automatically translated` label.
+* Fixed API display of branch in components with a shared repository.
+* Improved analysis on the failed push alert.
+* Fixed manually editing page when browsing changes.
+* Improved accuracy of :ref:`check-kashida`.
+* The Weblate Docker container now uses Python 3.10.
+
+Weblate 4.10
+------------
+
+Released on December 16th 2021.
+
+* Added support for formality and placeholders with DeepL.
+* Bulk edit and search and replace are now available on project and language level.
+* Added filtering to search and replace.
+* Fixed: "Perform automatic translation" privilege is no longer part of the *Languages* group.
+* "Perform automatic translation" is in the *Administration* and the new *Automatic translation* group.
+* Fixed generating XLSX files with special chars.
+* Added ability to the GitHub authentication backend to check if the user belongs to a specific GitHub organization or team.
+* Improved feedback on invalid parameters passed to API.
+* Added support for project scoped access tokens for API.
+* Fixed string removal in some cases.
+* Fixed translating newly added strings.
+* Label automatically translated strings to ease their filtering.
+
+`All changes in detail <https://github.com/WeblateOrg/weblate/milestone/74?closed=1>`__.
+
 Weblate 4.9.1
 -------------
 
@@ -312,7 +345,7 @@ Released on December 15th 2020.
 * Added alert when using ambiguous language codes.
 * The user is now presented with a filtered list of languages when adding a new translation.
 * Extended search capabilities for changes in history.
-* Improved billing detail pages and libre hosting workflow.
+* Improved billing detail pages and Libre hosting workflow.
 * Extended translation statistics API.
 * Improved "other translations" tab while translating.
 * Added tasks API.

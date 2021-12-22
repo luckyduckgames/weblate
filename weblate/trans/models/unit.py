@@ -27,7 +27,7 @@ from django.db import models, transaction
 from django.db.models import Count, Max, Q
 from django.utils import timezone
 from django.utils.functional import cached_property
-from django.utils.translation import gettext, gettext_lazy
+from django.utils.translation import gettext, gettext_lazy, gettext_noop
 from pyparsing import ParseException
 
 from weblate.checks.flags import Flags
@@ -48,6 +48,7 @@ from weblate.trans.util import (
     split_plural,
 )
 from weblate.trans.validators import validate_check_flags
+from weblate.utils import messages
 from weblate.utils.db import (
     FastDeleteModelMixin,
     FastDeleteQuerySetMixin,
@@ -278,6 +279,20 @@ class UnitQuerySet(FastDeleteQuerySetMixin, models.QuerySet):
         return super().select_for_update(no_key=using_postgresql())
 
 
+class LabelsField(models.ManyToManyField):
+    def save_form_data(self, instance, data):
+        from weblate.trans.models.label import TRANSLATION_LABELS
+
+        super().save_form_data(instance, data)
+
+        # Delete translation labels when not checked
+        new_labels = {label.name for label in data}
+        through = getattr(instance, self.attname).through.objects
+        for label in TRANSLATION_LABELS:
+            if label not in new_labels:
+                through.filter(unit__source_unit=instance, label__name=label).delete()
+
+
 class Unit(FastDeleteModelMixin, models.Model, LoggerMixin):
 
     translation = models.ForeignKey("Translation", on_delete=models.deletion.CASCADE)
@@ -326,9 +341,7 @@ class Unit(FastDeleteModelMixin, models.Model, LoggerMixin):
         null=True,
         default=None,
     )
-    labels = models.ManyToManyField(
-        "Label", verbose_name=gettext_lazy("Labels"), blank=True
-    )
+    labels = LabelsField("Label", verbose_name=gettext_lazy("Labels"), blank=True)
 
     source_unit = models.ForeignKey(
         "Unit", on_delete=models.deletion.CASCADE, blank=True, null=True
@@ -854,13 +867,29 @@ class Unit(FastDeleteModelMixin, models.Model, LoggerMixin):
 
         return ret
 
-    def propagate(self, user, change_action=None, author=None):
+    def propagate(self, user, change_action=None, author=None, request=None):
         """Propagate current translation to all others."""
+        from weblate.trans.models import ContributorAgreement
+
         result = False
         for unit in self.same_source_units:
-            if user is not None and not user.has_perm("unit.edit", unit):
-                continue
             if unit.target == self.target and unit.state == self.state:
+                continue
+            if user is not None and not user.has_perm("unit.edit", unit):
+                component = unit.translation.component
+                if (
+                    request
+                    and component.agreement
+                    and not ContributorAgreement.objects.has_agreed(user, component)
+                ):
+                    messages.warning(
+                        request,
+                        gettext(
+                            "String could not be propagated to %(component)s because "
+                            "you have not agreed with a contributor agreement."
+                        )
+                        % {"component": component},
+                    )
                 continue
             unit.target = self.target
             unit.state = self.state
@@ -881,6 +910,7 @@ class Unit(FastDeleteModelMixin, models.Model, LoggerMixin):
         change_action=None,
         author=None,
         run_checks: bool = True,
+        request=None,
     ):
         """Stores unit to backend.
 
@@ -905,7 +935,9 @@ class Unit(FastDeleteModelMixin, models.Model, LoggerMixin):
         # This has to be done before changing source for template
         was_propagated = False
         if propagate:
-            was_propagated = self.propagate(user, change_action, author=author)
+            was_propagated = self.propagate(
+                user, change_action, author=author, request=request
+            )
 
         changed = (
             self.old_unit["state"] == self.state
@@ -1179,7 +1211,7 @@ class Unit(FastDeleteModelMixin, models.Model, LoggerMixin):
         # This is always preset as it is used in top of this method
         self.clear_checks_cache()
 
-        if not self.is_batch_update:
+        if not self.is_batch_update and (create or old_checks):
             self.translation.invalidate_cache()
 
     def nearby(self, count):
@@ -1232,12 +1264,15 @@ class Unit(FastDeleteModelMixin, models.Model, LoggerMixin):
         change_action=None,
         propagate: bool = True,
         author=None,
+        request=None,
     ):
         """
         Store new translation of a unit.
 
         Propagation is currently disabled on import.
         """
+        component = self.translation.component
+
         # Fetch current copy from database and lock it for update
         old_unit = Unit.objects.select_for_update().get(pk=self.pk)
         self.store_old_unit(old_unit)
@@ -1264,14 +1299,18 @@ class Unit(FastDeleteModelMixin, models.Model, LoggerMixin):
             self.state = STATE_EMPTY
         self.original_state = self.state
         saved = self.save_backend(
-            user, change_action=change_action, propagate=propagate, author=author
+            user,
+            change_action=change_action,
+            propagate=propagate,
+            author=author,
+            request=request,
         )
 
         # Enforced checks can revert the state to needs editing (fuzzy)
         if (
             self.state >= STATE_TRANSLATED
-            and self.translation.component.enforced_checks
-            and self.all_checks_names & set(self.translation.component.enforced_checks)
+            and component.enforced_checks
+            and self.all_checks_names & set(component.enforced_checks)
         ):
             self.state = self.original_state = STATE_FUZZY
             self.save(run_checks=False, same_content=True, update_fields=["state"])
@@ -1280,11 +1319,22 @@ class Unit(FastDeleteModelMixin, models.Model, LoggerMixin):
             user
             and self.target != self.old_unit["target"]
             and self.state >= STATE_TRANSLATED
-            and not self.translation.component.is_glossary
+            and not component.is_glossary
         ):
             transaction.on_commit(
                 lambda: handle_unit_translation_change.delay(self.id, user.id)
             )
+
+        if change_action == Change.ACTION_AUTO:
+            label = component.project.label_set.get_or_create(
+                name=gettext_noop("Automatically translated"),
+                defaults={"color": "yellow"},
+            )[0]
+            self.labels.add(label)
+        else:
+            self.labels.through.objects.filter(
+                label__name="Automatically translated"
+            ).delete()
 
         return saved
 
@@ -1438,7 +1488,7 @@ class Unit(FastDeleteModelMixin, models.Model, LoggerMixin):
     def all_labels(self):
         if self.is_source:
             return self.labels.all()
-        return self.source_unit.all_labels
+        return self.source_unit.all_labels | self.labels.all()
 
     def get_flag_actions(self):
         flags = self.all_flags

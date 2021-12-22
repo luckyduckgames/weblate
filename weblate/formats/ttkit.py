@@ -400,6 +400,17 @@ class TTKitFormat(TranslationFormat):
 
         return unit
 
+    def untranslate_unit(self, unit, plural, fuzzy: bool):
+        if hasattr(unit, "markapproved"):
+            # Xliff only
+            unit.markapproved(False)
+        else:
+            unit.markfuzzy(fuzzy)
+        if unit.hasplural():
+            unit.target = [""] * plural.number
+        else:
+            unit.target = ""
+
     def untranslate_store(self, language, fuzzy: bool = False):
         """Remove translations from Translate Toolkit store."""
         self.store.settargetlanguage(self.get_language_code(language.code))
@@ -407,15 +418,7 @@ class TTKitFormat(TranslationFormat):
 
         for unit in self.store.units:
             if unit.istranslatable():
-                if hasattr(unit, "markapproved"):
-                    # Xliff only
-                    unit.markapproved(False)
-                else:
-                    unit.markfuzzy(fuzzy)
-                if unit.hasplural():
-                    unit.target = [""] * plural.number
-                else:
-                    unit.target = ""
+                self.untranslate_unit(unit, plural, fuzzy)
 
     @classmethod
     def get_new_file_content(cls):
@@ -462,7 +465,7 @@ class TTKitFormat(TranslationFormat):
         try:
             if not fast:
                 cls(base)
-            return True
+            return os.path.exists(base)
         except Exception as exception:
             if errors is not None:
                 errors.append(exception)
@@ -1111,6 +1114,16 @@ class XliffFormat(TTKitFormat):
     language_format = "bcp"
     use_settarget = True
 
+    def untranslate_unit(self, unit, plural, fuzzy: bool):
+        super().untranslate_unit(unit, plural, fuzzy)
+        # Delete empty <target/> tag
+        try:
+            xmlnode = self.unit.getlanguageNode(lang=None, index=1)
+            if xmlnode is not None:
+                xmlnode.getparent().remove(xmlnode)
+        except AttributeError:
+            pass
+
     def construct_unit(self, source: str):
         unit = super().construct_unit(source)
         # Make sure new unit is using same namespace as the original
@@ -1321,7 +1334,7 @@ class WebExtensionJSONFormat(JSONFormat):
 
 
 class I18NextFormat(JSONFormat):
-    name = _("i18next JSON file")
+    name = _("i18next JSON file v3")
     format_id = "i18next"
     loader = ("jsonl10n", "I18NextFile")
     autoload = ()
@@ -1341,6 +1354,7 @@ class ARBFormat(JSONFormat):
     loader = ("jsonl10n", "ARBJsonFile")
     autoload = ("*.arb",)
     unit_class = ARBJSONUnit
+    check_flags = ("icu-message-format",)
 
 
 class CSVFormat(TTKitFormat):

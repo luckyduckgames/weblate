@@ -178,7 +178,7 @@ class DuplicateLanguage(MultiAlert):
     def get_analysis(self):
         component = self.instance.component
         result = {"monolingual": bool(component.template)}
-        source = component.source_language
+        source = component.source_language.code
         for occurrence in self.occurrences:
             if occurrence["language_code"] == source:
                 result["source_language"] = True
@@ -221,11 +221,38 @@ class PushFailure(ErrorAlert):
     # Translators: Name of an alert
     verbose = _("Could not push the repository.")
     link_wide = True
+    behind_message = "The tip of your current branch is behind its remote counterpart"
+    terminal_message = "terminal prompts disabled"
 
-    def get_context(self, user):
-        result = super().get_context(user)
-        result["terminal"] = "terminal prompts disabled" in result["error"]
-        return result
+    def get_analysis(self):
+        terminal_disabled = self.terminal_message in self.error
+        repo_suggestion = None
+        force_push_suggestion = False
+        component = self.instance.component
+
+        # Missing credentials
+        if terminal_disabled:
+            if component.push:
+                if component.push.startswith("https://github.com/"):
+                    repo_suggestion = f"git@github.com:{component.push[19:]}"
+            elif component.repo.startswith("https://github.com/"):
+                repo_suggestion = f"git@github.com:{component.repo[19:]}"
+
+        # Missing commits
+        behind = self.behind_message in self.error
+        if behind:
+            force_push_suggestion = (
+                component.vcs == "git"
+                and component.merge_style == "rebase"
+                and component.bool(component.push_branch)
+            )
+
+        return {
+            "terminal": terminal_disabled,
+            "behind": behind,
+            "repo_suggestion": repo_suggestion,
+            "force_push_suggestion": force_push_suggestion,
+        }
 
 
 @register
@@ -345,7 +372,7 @@ class AmbiguousLanguage(BaseAlert):
 @register
 class NoLibreConditions(BaseAlert):
     # Translators: Name of an alert
-    verbose = _("Does not meet libre hosting conditions.")
+    verbose = _("Does not meet Libre hosting conditions.")
 
 
 @register
@@ -365,3 +392,14 @@ class NoMaskMatches(BaseAlert):
         return {
             "can_add": self.instance.component.can_add_new_language(None, fast=True),
         }
+
+
+@register
+class InexistantFiles(BaseAlert):
+    verbose = _("Inexistant files.")
+    doc_page = "admin/projects"
+    doc_anchor = "component-template"
+
+    def __init__(self, instance, files):
+        super().__init__(instance)
+        self.files = files

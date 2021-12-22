@@ -34,6 +34,7 @@ from celery.result import AsyncResult
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.validators import MaxValueValidator
 from django.db import models, transaction
 from django.db.models import Count, Q
 from django.urls import reverse
@@ -549,9 +550,10 @@ class Component(FastDeleteModelMixin, models.Model, URLMixin, PathMixin, CacheKe
             "Whether the repository should be pushed upstream on every commit."
         ),
     )
-    commit_pending_age = models.IntegerField(
+    commit_pending_age = models.SmallIntegerField(
         verbose_name=gettext_lazy("Age of changes to commit"),
         default=settings.COMMIT_PENDING_HOURS,
+        validators=[MaxValueValidator(2160)],
         help_text=gettext_lazy(
             "Time in hours after which any pending changes will be "
             "committed to the VCS."
@@ -2209,7 +2211,7 @@ class Component(FastDeleteModelMixin, models.Model, URLMixin, PathMixin, CacheKe
                     }
                 )
             # Push repo is not used with link
-            for setting in ("push", "branch"):
+            for setting in ("push", "branch", "push_branch"):
                 if getattr(self, setting):
                     raise ValidationError(
                         {setting: _("Option is not available for linked repositories.")}
@@ -2820,6 +2822,16 @@ class Component(FastDeleteModelMixin, models.Model, URLMixin, PathMixin, CacheKe
         else:
             self.delete_alert("NoMaskMatches")
 
+        missing_files = [
+            name
+            for name in (self.template, self.intermediate, self.new_base)
+            if name and not os.path.exists(os.path.join(self.full_path, name))
+        ]
+        if missing_files:
+            self.add_alert("InexistantFiles", files=missing_files)
+        else:
+            self.delete_alert("InexistantFiles")
+
         self.update_link_alerts()
 
     def get_ambiguous_translations(self):
@@ -2965,11 +2977,15 @@ class Component(FastDeleteModelMixin, models.Model, URLMixin, PathMixin, CacheKe
             return False
 
         # Check if template can be parsed
-        if not fast and self.has_template():
-            try:
-                self.template_store.check_valid()
-            except (FileParseError, ValueError):
-                return False
+        if self.has_template():
+            if fast:
+                if not os.path.exists(self.get_template_filename()):
+                    return False
+            else:
+                try:
+                    self.template_store.check_valid()
+                except (FileParseError, ValueError):
+                    return False
 
         return self.is_valid_base_for_new(fast=fast)
 
@@ -3054,6 +3070,9 @@ class Component(FastDeleteModelMixin, models.Model, URLMixin, PathMixin, CacheKe
             messages.warning(
                 request, _("The translation will be updated in the background.")
             )
+
+        # Delete no matches alert as we have just added the file
+        self.delete_alert("NoMaskMatches")
 
         return translation
 

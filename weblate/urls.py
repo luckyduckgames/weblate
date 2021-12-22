@@ -207,6 +207,11 @@ real_patterns = [
         name="replace",
     ),
     path(
+        "replace/<name:project>/-/<name:lang>/",
+        weblate.trans.views.search.search_replace,
+        name="replace",
+    ),
+    path(
         "replace/<name:project>/<name:component>/<name:lang>/",
         weblate.trans.views.search.search_replace,
         name="replace",
@@ -218,6 +223,11 @@ real_patterns = [
     ),
     path(
         "bulk-edit/<name:project>/<name:component>/",
+        weblate.trans.views.search.bulk_edit,
+        name="bulk-edit",
+    ),
+    path(
+        "bulk-edit/<name:project>/-/<name:lang>/",
         weblate.trans.views.search.bulk_edit,
         name="bulk-edit",
     ),
@@ -377,6 +387,16 @@ real_patterns = [
         "access/<name:project>/set/",
         weblate.trans.views.acl.set_groups,
         name="set-groups",
+    ),
+    path(
+        "token/<name:project>/create/",
+        weblate.trans.views.acl.create_token,
+        name="create-project-token",
+    ),
+    path(
+        "token/<name:project>/delete/",
+        weblate.trans.views.acl.delete_token,
+        name="delete-project-token",
     ),
     # Used by weblate.org to reder own activity chart on homepage
     path(

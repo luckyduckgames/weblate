@@ -333,6 +333,8 @@ Repository URL used for pushing. This setting is used only for :ref:`vcs-git`
 and :ref:`vcs-mercurial` and push support is turned off for these when this is
 empty.
 
+For linked repositories, this is not used and setting from linked component applies.
+
 .. seealso::
 
    See :ref:`vcs-repos` for more details on how to specify a repository URL and
@@ -371,12 +373,16 @@ Repository branch
 
 Which branch to checkout from the VCS, and where to look for translations.
 
+For linked repositories, this is not used and setting from linked component applies.
+
 .. _component-push_branch:
 
 Push branch
 +++++++++++
 
 Branch for pushing changes, leave empty to use :ref:`component-branch`.
+
+For linked repositories, this is not used and setting from linked component applies.
 
 .. note::
 
@@ -438,7 +444,7 @@ strings.
 
 When set, the source strings are based on this file, but all other languages
 are based on :ref:`component-template`. In case the string is not translated
-into the source langugage, translating to other languages is prohibited. This
+into the source language, translating to other languages is prohibited. This
 provides :ref:`source-quality-gateway`.
 
 .. seealso::
@@ -636,8 +642,22 @@ Merge style
 +++++++++++
 
 You can configure how updates from the upstream repository are handled.
-This might not be supported for some VCSs. See :ref:`merge-rebase` for
-more details.
+The actual implementation depends on VCS, see :doc:`/vcs`.
+
+Rebase
+   Rebases Weblate commits on top of upstream repository on update. This
+   provides clean history without extra merge commits.
+
+   Rebasing can cause you trouble in case of complicated merges, so carefully
+   consider whether or not you want to enable them.
+
+   You might need to enable force pushing by choosing :ref:`vcs-git-force-push`
+   as :ref:`component-vcs`, especially when pushing to a different branch.
+
+Merge
+   Upstream repository changed are merged into Weblate one. This is the safest
+   way, but might produce a lot of merge commits.
+
 
 Default value can be changed by :setting:`DEFAULT_MERGE_STYLE`.
 

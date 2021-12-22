@@ -133,7 +133,8 @@ h1 {
 }
 
 .vertical-text {
-  writing-mode: tb;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
 }
 
 footer {
@@ -527,6 +528,9 @@ form + .login-label {
   background-color: #e5f0f2;
   padding: 8px 10px;
   word-wrap: break-word;
+}
+.comment-content blockquote {
+  border-left: 5px solid #ddd;
 }
 
 .comment-source {
@@ -1751,7 +1755,7 @@ a.language:hover {
   background-color: #f6664c;
 }
 .unit-state-approved {
-  background-color: #00d2e6;
+  background-color: #1378d0;
 }
 .unit-state-saving {
   animation: morph-state 2s infinite;

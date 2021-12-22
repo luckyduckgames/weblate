@@ -315,7 +315,7 @@ def perform_translation(unit, form, request):
         unit.explanation = form.cleaned_data["explanation"]
     # Save
     saved = unit.translate(
-        user, form.cleaned_data["target"], form.cleaned_data["state"]
+        user, form.cleaned_data["target"], form.cleaned_data["state"], request=request
     )
     # Make sure explanation is saved
     if not saved and change_explanation:
@@ -696,7 +696,9 @@ def auto_translation(request, project, component, lang):
     )
 
     if settings.CELERY_TASK_ALWAYS_EAGER:
-        messages.success(request, auto_translate(*args, translation=translation))
+        messages.success(
+            request, auto_translate(*args, translation=translation)["message"]
+        )
     else:
         task = auto_translate.delay(*args)
         messages.success(
@@ -760,7 +762,7 @@ def delete_comment(request, pk):
     if "spam" in request.POST:
         comment_obj.report_spam()
     comment_obj.delete()
-    messages.info(request, _("Translation comment has been deleted."))
+    messages.info(request, _("Comment has been deleted."))
 
     return redirect_next(request.POST.get("next"), fallback_url)
 
@@ -778,7 +780,7 @@ def resolve_comment(request, pk):
 
     comment_obj.resolved = True
     comment_obj.save(update_fields=["resolved"])
-    messages.info(request, _("Translation comment has been resolved."))
+    messages.info(request, _("Comment has been resolved."))
 
     return redirect_next(request.POST.get("next"), fallback_url)
 

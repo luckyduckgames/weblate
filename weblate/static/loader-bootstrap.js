@@ -1,4 +1,4 @@
-var loading = 0;
+var loading = [];
 
 // Remove some weird things from location hash
 if (
@@ -11,15 +11,18 @@ if (
 
 // Loading indicator handler
 function increaseLoading(sel) {
-  if (loading === 0) {
+  if (!(sel in loading)) {
+    loading[sel] = 0;
+  }
+  if (loading[sel] === 0) {
     $("#loading-" + sel).show();
   }
-  loading += 1;
+  loading[sel] += 1;
 }
 
 function decreaseLoading(sel) {
-  loading -= 1;
-  if (loading === 0) {
+  loading[sel] -= 1;
+  if (loading[sel] === 0) {
     $("#loading-" + sel).hide();
   }
 }
@@ -1195,12 +1198,28 @@ $(function () {
   Prism.languages.none = {};
   initHighlight(document);
 
+  $(".replace-preview input[type='checkbox']").on("change", function () {
+    $(this).closest("tr").toggleClass("warning", this.checked);
+  });
+
   /* Warn users that they do not want to use developer console in most cases */
-  console.log("%cStop!", "color: red; font-weight: bold; font-size: 50px;");
   console.log(
-    "%cThis is a console for developers. If someone has asked you to open this " +
-      "window, they are likely trying to compromise your Weblate account.",
-    "color: red;"
+    "%c" +
+      pgettext("Alert to user when opening browser developer console", "Stop!"),
+    "color: red; font-weight: bold; font-size: 50px; font-family: sans-serif; -webkit-text-stroke: 1px black;"
   );
-  console.log("%cPlease close this window now.", "color: blue;");
+  console.log(
+    "%c" +
+      gettext(
+        "This is a browser feature intended for developers. If someone told you to copy-paste something here, they are likely trying to compromise your Weblate account."
+      ),
+    "font-size: 20px; font-family: sans-serif"
+  );
+  console.log(
+    "%c" +
+      gettext(
+        "See https://en.wikipedia.org/wiki/Self-XSS for more information."
+      ),
+    "font-size: 20px; font-family: sans-serif"
+  );
 });

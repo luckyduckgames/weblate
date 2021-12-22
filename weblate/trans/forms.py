@@ -54,7 +54,15 @@ from weblate.lang.models import Language
 from weblate.machinery import MACHINE_TRANSLATION_SERVICES
 from weblate.trans.defines import COMPONENT_NAME_LENGTH, REPO_LENGTH
 from weblate.trans.filter import FILTERS, get_filter_choice
-from weblate.trans.models import Announcement, Change, Component, Label, Project, Unit
+from weblate.trans.models import (
+    Announcement,
+    Change,
+    Component,
+    Label,
+    Project,
+    ProjectToken,
+    Unit,
+)
 from weblate.trans.specialchars import RTL_CHARS_DATA, get_special_chars
 from weblate.trans.util import check_upload_method_permissions, is_repo_link
 from weblate.trans.validators import validate_check_flags
@@ -831,7 +839,14 @@ class AutoForm(forms.Form):
         ],
         initial="suggest",
     )
-    filter_type = FilterField(required=True, initial="todo")
+    filter_type = FilterField(
+        required=True,
+        initial="todo",
+        help_text=_(
+            "Please note that translating all strings will "
+            "discard all existing translations."
+        ),
+    )
     auto_source = forms.ChoiceField(
         label=_("Automatic translation source"),
         choices=[
@@ -1068,6 +1083,11 @@ class ContextForm(forms.ModelForm):
         return self.doc_links[field.name]
 
     def __init__(self, data=None, instance=None, user=None, **kwargs):
+        kwargs["initial"] = {
+            "labels": Label.objects.filter(
+                Q(unit=instance) | Q(unit__source_unit=instance)
+            )
+        }
         super().__init__(data=data, instance=instance, **kwargs)
         project = instance.translation.component.project
         self.fields["labels"].queryset = project.label_set.all()
@@ -1997,8 +2017,15 @@ class ProjectCreateForm(SettingsBaseForm, ProjectDocsMixin, ProjectAntispamMixin
 
 
 class ReplaceForm(forms.Form):
+    q = QueryField(
+        required=False, help_text=_("Optional additional filter on the strings")
+    )
     search = forms.CharField(
-        label=_("Search string"), min_length=1, required=True, strip=False
+        label=_("Search string"),
+        min_length=1,
+        required=True,
+        strip=False,
+        help_text=_("Case sensitive string to replace and search."),
     )
     replacement = forms.CharField(
         label=_("Replacement string"), min_length=1, required=True, strip=False
@@ -2007,6 +2034,14 @@ class ReplaceForm(forms.Form):
     def __init__(self, *args, **kwargs):
         kwargs["auto_id"] = "id_replace_%s"
         super().__init__(*args, **kwargs)
+        self.helper = FormHelper(self)
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            SearchField("q"),
+            Field("search"),
+            Field("replacement"),
+            Div(template="snippets/replace-help.html"),
+        )
 
 
 class ReplaceConfirmForm(forms.Form):
@@ -2220,6 +2255,7 @@ class BulkEditForm(forms.Form):
 
     def __init__(self, user, obj, *args, **kwargs):
         project = kwargs.pop("project")
+        kwargs["auto_id"] = "id_bulk_%s"
         super().__init__(*args, **kwargs)
         labels = project.label_set.all()
         if labels:
@@ -2238,7 +2274,11 @@ class BulkEditForm(forms.Form):
         self.helper = FormHelper(self)
         self.helper.form_tag = False
         self.helper.layout = Layout(
-            SearchField("q"), Field("state"), Field("add_flags"), Field("remove_flags")
+            Div(template="snippets/bulk-help.html"),
+            SearchField("q"),
+            Field("state"),
+            Field("add_flags"),
+            Field("remove_flags"),
         )
         if labels:
             self.helper.layout.append(InlineCheckboxes("add_labels"))
@@ -2360,3 +2400,43 @@ class LabelForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.helper = FormHelper(self)
         self.helper.form_tag = False
+
+
+class ProjectTokenDeleteForm(forms.Form):
+    token = forms.ModelChoiceField(
+        ProjectToken.objects.none(),
+        widget=forms.HiddenInput,
+        required=True,
+    )
+
+    def __init__(self, project, *args, **kwargs):
+        self.project = project
+        super().__init__(*args, **kwargs)
+        self.fields["token"].queryset = project.projecttoken_set.all()
+
+
+class ProjectTokenCreateForm(forms.ModelForm):
+    class Meta:
+        model = ProjectToken
+        fields = ["name", "expires", "project"]
+        widgets = {
+            "expires": WeblateDateInput(),
+            "project": forms.HiddenInput,
+        }
+
+    def __init__(self, project, *args, **kwargs):
+        self.project = project
+        kwargs["initial"] = {"project": project}
+        super().__init__(*args, **kwargs)
+
+    def clean_project(self):
+        if self.project != self.cleaned_data["project"]:
+            raise ValidationError("Invalid project!")
+        return self.cleaned_data["project"]
+
+    def clean_expires(self):
+        expires = self.cleaned_data["expires"]
+        expires = expires.replace(hour=23, minute=59, second=59, microsecond=999999)
+        if expires < timezone.now():
+            raise forms.ValidationError(gettext("Expires cannot be in the past!"))
+        return expires
